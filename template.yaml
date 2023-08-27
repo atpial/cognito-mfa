@@ -1,31 +1,28 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Practicing Cognito user pool
+Description: Cognito user pool with mfa enabled
 
 Parameters:
-  AppName:
+  # AppName:
+  #   Type: String
+  #   Description: Name of the application
+  StageName:
     Type: String
-    Description: Name of the application
-  ClientDomains:
-    Type: CommaDelimitedList
-    Description: List of domains
-  UserEmail:
+    Default: dev
+  ProjectName:
     Type: String
-    Description: Admin email address
+    Description: 'Name of the project'
+    Default: 'cognito-mfa'
 
 Resources:
         # ///---------------User Pool-----------------/// 
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      # AccountRecoverySetting:
-      #   RecoveryMechanisms: 
-      #     Name: email
-      #     Priority: 1
-      UserPoolName: !Sub ${AppName}-UserPool
+      UserPoolName: !Sub ${ProjectName}-${StageName}-UserPool
       Policies:
         PasswordPolicy:
-          MinimumLength: 8
+          MinimumLength: 6
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -34,32 +31,40 @@ Resources:
         - AttributeDataType: String
           Name: email
           Required: false
+      MfaConfiguration: "ON"
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref UserPool
-      ClientName: !Sub ${AppName}-UserPoolClient
+      ClientName: !Sub ${ProjectName}-${StageName}-UserPoolClient
       GenerateSecret: false
       SupportedIdentityProviders:
         - COGNITO
-      CallbackURLs: !Ref ClientDomains
-      LogoutURLs: !Ref ClientDomains
-      AllowedOAuthFlowsUserPoolClient: true
-      AllowedOAuthFlows:
-        - code
-        - implicit
+      # CallbackURLs: !Ref ClientDomains
+      # LogoutURLs: !Ref ClientDomains
+      # AllowedOAuthFlowsUserPoolClient: true
+      # AllowedOAuthFlows:
+      #   - code
+      #   - implicit
         # - client_credentials
-      AllowedOAuthScopes:
-        - email
-        - openid
-        - profile
+      # AllowedOAuthScopes:
+      #   - email
+      #   - openid
+      #   - profile
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
 
-  UserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties: 
-      Domain: !Sub ${AppName}-${AWS::AccountId}
-      UserPoolId: !Ref UserPool
+  # UserPoolDomain:
+  #   Type: AWS::Cognito::UserPoolDomain
+  #   Properties: 
+  #     Domain: !Sub sam-mfa-${StageName}-domain
+  #     UserPoolId: !Ref UserPool
 
   UserGroup:
     Type: AWS::Cognito::UserPoolGroup
@@ -163,7 +168,7 @@ Resources:
     Properties:
       Timeout: 5
       Handler: sign_up.lambda_handler
-      Runtime: python3.8
+      Runtime: python3.11
       CodeUri: src/
       Environment:
         Variables:
@@ -176,13 +181,15 @@ Resources:
             Path:  /signup
             Method: post
             RestApiId: !Ref DefaultApi
+            # Auth:
+            #   Authorizer: NONE
 
   LoginFunction:
     Type: AWS::Serverless::Function
     Properties:
       Timeout: 5
       Handler: log_in.lambda_handler
-      Runtime: python3.8
+      Runtime: python3.11
       CodeUri: src/
       Environment:
         Variables:
@@ -195,6 +202,8 @@ Resources:
             Path:  /login
             Method: post
             RestApiId: !Ref DefaultApi
+            # Auth:
+            #   Authorizer: NONE
 
   ValidateFunction:
     Type: AWS::Serverless::Function
@@ -273,26 +282,26 @@ Resources:
             RestApiId: !Ref DefaultApi
 
         # ///---------------Bucket-----------------/// 
-  S3Bucket:
-    Type: 'AWS::S3::Bucket'
-    Properties:
-      BucketName: sll-storage-bucket
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders: 
-              - '*'
-            AllowedOrigins: 
-              - '*'
-            AllowedMethods:
-              - PUT
-              - POST 
-              - DELETE
-              - GET
-            AllowedOrigins: 
-              - '*'
-            ExposedHeaders:
-              - ETag
-              - x-amz-meta-custom-header
+  # S3Bucket:
+  #   Type: 'AWS::S3::Bucket'
+  #   Properties:
+  #     BucketName: sll-storage-bucket
+  #     CorsConfiguration:
+  #       CorsRules:
+  #         - AllowedHeaders: 
+  #             - '*'
+  #           AllowedOrigins: 
+  #             - '*'
+  #           AllowedMethods:
+  #             - PUT
+  #             - POST 
+  #             - DELETE
+  #             - GET
+  #           AllowedOrigins: 
+  #             - '*'
+  #           ExposedHeaders:
+  #             - ETag
+  #             - x-amz-meta-custom-header
 
 Outputs:
 
@@ -300,7 +309,7 @@ Outputs:
     Description: "User pool ID"
     Value: !Ref UserPool
     Export:
-      Name: !Sub ${AppName}:UserPoolId
+      Name: !Sub ${ProjectName}:UserPoolId
 
   UserPoolClientId:
     Description: "Application client ID"
@@ -312,28 +321,28 @@ Outputs:
 
   SignupFunctionApi:
     Description: "API Gateway endpoint URL for Prod stage for Signup function"
-    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/signup/"
+    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/signup/"
 
   LoginFunctionApi:
     Description: "API Gateway endpoint URL for Prod stage for Login function"
-    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/login/"
+    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/login/"
   
-  ValidateFunctionApi:
-    Description: "API Gateway endpoint URL for Prod stage for Validate user with Confirmation code function"
-    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/confirm_signup/"
+  # ValidateFunctionApi:
+  #   Description: "API Gateway endpoint URL for Prod stage for Validate user with Confirmation code function"
+  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/confirm_signup/"
 
-  ReValidateFunctionApi:
-    Description: "API Gateway endpoint URL for Prod stage for Resend Confirmation code function"
-    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/resend_confirm_code/"
+  # ReValidateFunctionApi:
+  #   Description: "API Gateway endpoint URL for Prod stage for Resend Confirmation code function"
+  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/resend_confirm_code/"
 
-  ForgotPwdFunctionApi:
-    Description: "API Gateway endpoint URL for Prod stage for forgot password function"
-    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/forgot_password/"
+  # ForgotPwdFunctionApi:
+  #   Description: "API Gateway endpoint URL for Prod stage for forgot password function"
+  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/forgot_password/"
 
-  ConfirmForgotPwdFunction:
-    Description: "API Gateway endpoint URL for Prod stage for Confirm forgot password function"
-    Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/confirm_forgot_pwd/"
+  # ConfirmForgotPwdFunction:
+  #   Description: "API Gateway endpoint URL for Prod stage for Confirm forgot password function"
+  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/confirm_forgot_pwd/"
 
-  BucketName:
-    Value: !Ref S3Bucket
-    Description: SLLStorageBucket Amazon S3 bucket with CORS enabled.
+  # BucketName:
+  #   Value: !Ref S3Bucket
+  #   Description: SLLStorageBucket Amazon S3 bucket with CORS enabled.

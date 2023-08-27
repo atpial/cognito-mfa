@@ -13,16 +13,31 @@ def authenticate(username, password):
         'PASSWORD': password
          }
     )
-    print(response)
+    # print(response)
     return response
 
+# def verify_mfa_code()
 def lambda_handler(event, context):
     print(event)
-    body = json.loads(event['body'])
-    username = body["username"]
-    password = body["password"]
+    # body = json.loads(event['body'])
+    username = event["username"]
+    password = event["password"]
+    mfa_code = event["mfa_code"]
     try:
         authenticated = authenticate(username, password)
+        print(f"authenticated response: {authenticated}")
+        if authenticated["ChallengeName"] == "MFA_SETUP":
+            mfa_response = client.associate_software_token(
+                Session=authenticated["Session"]
+            )
+            print(f"{mfa_response = }")
+            
+            verified_response = client.verify_software_token(
+                Session=mfa_response["Session"],
+                UserCode=mfa_code
+            )
+            print(f"{verified_response = }")
+            
         token = {
             'access_token' : authenticated['AuthenticationResult']['AccessToken'],
             'refresh_token' : authenticated['AuthenticationResult']['RefreshToken'],
