@@ -35,6 +35,8 @@ Resources:
       MfaConfiguration: "OPTIONAL"
       EnabledMfas:
         - SOFTWARE_TOKEN_MFA
+      LambdaConfig:
+        PreSignUp: !GetAtt PreSignUpFunction.Arn
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -177,7 +179,7 @@ Resources:
       Environment:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient         
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         SignUp:
           Type: Api
@@ -198,7 +200,7 @@ Resources:
       Environment:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         Login:
           Type: Api
@@ -219,7 +221,7 @@ Resources:
       Environment:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         Login:
           Type: Api
@@ -241,7 +243,7 @@ Resources:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
           COGNITO_USERPOOL_ID: !Ref UserPool
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         Login:
           Type: Api
@@ -263,7 +265,7 @@ Resources:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
           COGNITO_USERPOOL_ID: !Ref UserPool
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         Login:
           Type: Api
@@ -283,7 +285,7 @@ Resources:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
           COGNITO_USERPOOL_ID: !Ref UserPool
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         Login:
           Type: Api
@@ -302,7 +304,7 @@ Resources:
       Environment:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         ConfirmSignUp:
           Type: Api
@@ -321,7 +323,7 @@ Resources:
       Environment:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         ConfirmSignUp:
           Type: Api
@@ -340,7 +342,7 @@ Resources:
       Environment:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient         
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         SignUp:
           Type: Api
@@ -359,7 +361,7 @@ Resources:
       Environment:
         Variables:
           COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
-      Role: !GetAtt CognitoRole.Arn
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
       Events:
         ConfirmSignUp:
           Type: Api
@@ -389,6 +391,97 @@ Resources:
   #           ExposedHeaders:
   #             - ETag
   #             - x-amz-meta-custom-header
+
+  # =========================== Trigger =======================
+  PreSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.11
+      CodeUri: lambdas/authentication/
+      Handler: presignup.lambda_handler
+      Role: !GetAtt CustomLambdaAuroraVPCRole.Arn
+
+  # ====================== Roles ==========================
+  CognitoPreSignUpFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PreSignUpFunction.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  CustomLambdaAuroraVPCRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "acm:*"
+                  - "application-autoscaling:*"
+                  - "cloudwatch:*"
+                  - "cloudformation:*"
+                  - "cognito-identity:*"
+                  - "cognito-idp:*"
+                  - "cognito-sync:*"
+                  - "cloudfront-vod:*"
+                  - "dynamodb:*"
+                  - "dax:*"
+                  - "datapipeline:*"
+                  - "ec2:*"
+                  - "elasticfilesystem:ClientMount"
+                  - "elasticfilesystem:ClientWrite"
+                  - "iam:*"
+                  - "kms:*"
+                  - "kinesis:*"
+                  - "lambda:*"
+                  - "logs:*"
+                  - "mediaconvert:*"
+                  - "mediapackage-vod:*"
+                  - "mobiletargeting:*"
+                  - "outposts:*"
+                  - "pi:*"
+                  - "rds:*"
+                  - "es:*"
+                  - "redshift:*"
+                  - "resource-groups:*"
+                  - "s3:*"
+                  - "secretsmanager:*"
+                  - "sns:*"
+                  - "sqs:*"
+                  - "ses:*"
+                  - "states:*"
+                  - "tag:*"
+                  - "chime:*"
+                  - "execute-api:*"
+                  - "events:*"
+                  - "appconfig:*"
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - "rds-db:connect"
+                Resource: !Sub "arn:aws:rds:us-west-2:${AWS::AccountId}:db-proxy:*/*"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+                - 'mediaconvert.amazonaws.com'
+                - 'cloudfront.amazonaws.com'
+                - !Sub "states.${AWS::Region}.amazonaws.com"
+                - 'mediapackage.amazonaws.com'
+                - 'rds.amazonaws.com'
+                - 'secretsmanager.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
 
 Outputs:
 

@@ -59,8 +59,27 @@ def lambda_handler(event, context):
             'message': 'Password is invalid. Please check again.'
             })
         }
+    # except client.exceptions.UserLambdaValidationException as e:
+    #     print("UserLambdaValidationException: ",e)
+    #     return {
+    #         'statusCode': 400,
+    #         'error': True,
+    #         'code': 'INVALID_DOMAIN',
+    #         'body': json.dumps({
+    #         'message': "Domain is invalid. Can't signup using provided email domain."
+    #         })
+    #     }
     except Exception as e:
         print(e)
+        if "::PRESIGNUP::" in e:
+            return {
+            'statusCode': 400,
+            'error': True,
+            'code': 'INVALID_DOMAIN',
+            'body': json.dumps({
+            'message': e.split("::PRESIGNUP::")[1],
+            })
+        }
         return{
             'statusCode': 400,
             'body': json.dumps({

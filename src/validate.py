@@ -18,9 +18,9 @@ def confirm_log_in(username, confirm_code):
 def lambda_handler(event, context):
 
     print(event)
-    # body = json.loads(event['body'])
-    username = event['username']
-    confirm_code = event['confirm_code']
+    body = json.loads(event['body'])
+    username = body['username']
+    confirm_code = body['confirm_code']
     try:
         confirmed = confirm_log_in(username, confirm_code)
         return{
