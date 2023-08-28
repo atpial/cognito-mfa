@@ -31,7 +31,8 @@ Resources:
         - AttributeDataType: String
           Name: email
           Required: false
-      MfaConfiguration: "ON"
+      # MfaConfiguration: "ON"OPTIONAL
+      MfaConfiguration: "OPTIONAL"
       EnabledMfas:
         - SOFTWARE_TOKEN_MFA
 
@@ -140,12 +141,12 @@ Resources:
   #               Action: 
   #                 - "s3:*"
   #               Resource: '*'
- 
+  
         # ///---------------API's-----------------/// 
   DefaultApi:
     Type: AWS::Serverless::Api
     Properties:
-      StageName: Prod
+      StageName: !Sub ${StageName}
       GatewayResponses:
         DEFAULT_4XX:
           ResponseParameters:
@@ -161,6 +162,9 @@ Resources:
         AllowMethods: "'*'"
         AllowHeaders: "'*'"
         AllowOrigin: "'*'"
+      # Authorizers:
+      #     CognitoAuthorizer:
+      #       UserPoolArn: !GetAtt UserPool.Arn
 
         # ///---------------Lambda Functions-----------------/// 
   SignupFunction:
@@ -184,11 +188,11 @@ Resources:
             # Auth:
             #   Authorizer: NONE
 
-  LoginFunction:
+  AddMfaDeviceFunction:
     Type: AWS::Serverless::Function
     Properties:
       Timeout: 5
-      Handler: log_in.lambda_handler
+      Handler: add_mfa_device.lambda_handler
       Runtime: python3.11
       CodeUri: src/
       Environment:
@@ -199,11 +203,94 @@ Resources:
         Login:
           Type: Api
           Properties:
-            Path:  /login
+            Path:  /add_mfa_device
             Method: post
             RestApiId: !Ref DefaultApi
             # Auth:
             #   Authorizer: NONE
+
+  MfaCodeVerifyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 5
+      Handler: mfa_code_verify.lambda_handler
+      Runtime: python3.11
+      CodeUri: src/
+      Environment:
+        Variables:
+          COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
+      Role: !GetAtt CognitoRole.Arn
+      Events:
+        Login:
+          Type: Api
+          Properties:
+            Path:  /mfa_code_verify
+            Method: post
+            RestApiId: !Ref DefaultApi
+            # Auth:
+            #   Authorizer: NONE
+
+  LoginWithMfaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 5
+      Handler: mfa_login.lambda_handler
+      Runtime: python3.11
+      CodeUri: src/
+      Environment:
+        Variables:
+          COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
+          COGNITO_USERPOOL_ID: !Ref UserPool
+      Role: !GetAtt CognitoRole.Arn
+      Events:
+        Login:
+          Type: Api
+          Properties:
+            Path:  /mfa_login
+            Method: post
+            RestApiId: !Ref DefaultApi
+            # Auth:
+            #   Authorizer: NONE
+
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 5
+      Handler: login.lambda_handler
+      Runtime: python3.11
+      CodeUri: src/
+      Environment:
+        Variables:
+          COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
+          COGNITO_USERPOOL_ID: !Ref UserPool
+      Role: !GetAtt CognitoRole.Arn
+      Events:
+        Login:
+          Type: Api
+          Properties:
+            Path:  /login
+            Method: post
+            RestApiId: !Ref DefaultApi
+
+  AddMfaPreferenceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 5
+      Handler: add_mfa_preference.lambda_handler
+      Runtime: python3.11
+      CodeUri: src/
+      Environment:
+        Variables:
+          COGNITO_USER_CLIENT_ID: !Ref UserPoolClient
+          COGNITO_USERPOOL_ID: !Ref UserPool
+      Role: !GetAtt CognitoRole.Arn
+      Events:
+        Login:
+          Type: Api
+          Properties:
+            Path:  /mfa_preference
+            Method: post
+            RestApiId: !Ref DefaultApi
 
   ValidateFunction:
     Type: AWS::Serverless::Function
@@ -315,10 +402,6 @@ Outputs:
     Description: "Application client ID"
     Value: !Ref UserPoolClient
 
-  # AuthUrl:
-  #   Description: "URL used for authentication"
-  #   Value: !Sub https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
-
   SignupFunctionApi:
     Description: "API Gateway endpoint URL for Prod stage for Signup function"
     Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/signup/"
@@ -327,22 +410,3 @@ Outputs:
     Description: "API Gateway endpoint URL for Prod stage for Login function"
     Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/login/"
   
-  # ValidateFunctionApi:
-  #   Description: "API Gateway endpoint URL for Prod stage for Validate user with Confirmation code function"
-  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/confirm_signup/"
-
-  # ReValidateFunctionApi:
-  #   Description: "API Gateway endpoint URL for Prod stage for Resend Confirmation code function"
-  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/resend_confirm_code/"
-
-  # ForgotPwdFunctionApi:
-  #   Description: "API Gateway endpoint URL for Prod stage for forgot password function"
-  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/forgot_password/"
-
-  # ConfirmForgotPwdFunction:
-  #   Description: "API Gateway endpoint URL for Prod stage for Confirm forgot password function"
-  #   Value: !Sub "https://${DefaultApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/confirm_forgot_pwd/"
-
-  # BucketName:
-  #   Value: !Ref S3Bucket
-  #   Description: SLLStorageBucket Amazon S3 bucket with CORS enabled.

@@ -4,44 +4,47 @@ import boto3
 
 client = boto3.client('cognito-idp')
 
-def authenticate(username, password):
-    response = client.initiate_auth(
-        ClientId=os.environ.get('COGNITO_USER_CLIENT_ID'),
-        AuthFlow = 'USER_PASSWORD_AUTH',
-        AuthParameters={
-        'USERNAME': username,
-        'PASSWORD': password
-         }
+def set_mfa_preference(username,mfa):
+    response = client.admin_set_user_mfa_preference(
+        UserPoolId=os.environ.get("COGNITO_USERPOOL_ID"),
+        Username=username,
+        # SMSMfaSettings={
+        #     'Enabled': True|False,
+        #     'PreferredMfa': True|False
+        # },
+        SoftwareTokenMfaSettings={
+            'Enabled': mfa,
+            'PreferredMfa': mfa
+        },
     )
-    # print(response)
     return response
 
-# def verify_mfa_code()
+def get_user_attributes(username):
+    response = client.admin_get_user(
+    UserPoolId=os.environ.get("COGNITO_USERPOOL_ID"),
+    Username=username
+    )
+    return response
+
 def lambda_handler(event, context):
     print(event)
-    # body = json.loads(event['body'])
-    username = event["username"]
-    password = event["password"]
-    mfa_code = event["mfa_code"]
+    body = json.loads(event['body'])
+    username = body["username"]
+    mfa = body["mfa"]
     try:
-        authenticated = authenticate(username, password)
-        print(f"authenticated response: {authenticated}")
-        if authenticated["ChallengeName"] == "MFA_SETUP":
-            mfa_response = client.associate_software_token(
-                Session=authenticated["Session"]
-            )
-            print(f"{mfa_response = }")
-            
-            verified_response = client.verify_software_token(
-                Session=mfa_response["Session"],
-                UserCode=mfa_code
-            )
-            print(f"{verified_response = }")
-            
+        user_attribute_before = get_user_attributes(username)
+        print(f"{user_attribute_before = }")
+
+        mfa_preference = set_mfa_preference(username, mfa)
+        print(f"{mfa_preference = }")
+        
+        user_attribute_after = get_user_attributes(username)
+        print(f"{user_attribute_after = }")
+
         token = {
-            'access_token' : authenticated['AuthenticationResult']['AccessToken'],
-            'refresh_token' : authenticated['AuthenticationResult']['RefreshToken'],
-            'id_token': authenticated['AuthenticationResult']['IdToken']
+            # 'access_token' : authenticated['AuthenticationResult']['AccessToken'],
+            # 'refresh_token' : authenticated['AuthenticationResult']['RefreshToken'],
+            # 'id_token': authenticated['AuthenticationResult']['IdToken']
         }
         return{
             'statusCode': 200,

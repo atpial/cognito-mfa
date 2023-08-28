@@ -20,7 +20,7 @@ def sign_up(username, password):
     return response
 
 def lambda_handler(event, context):
-    # print(event)
+    print(f"{event = }")
     body = json.loads(event['body'])
     username = body["username"]
     password = body["password"]
